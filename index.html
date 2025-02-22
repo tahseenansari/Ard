@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Zayan AI - Chat Interface</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: sans-serif; }
+  .sidebar { position: fixed; top: 0; left: 0; width: 250px; height: 100vh; background-color: #fff; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); z-index: 10; transform: translateX(-100%); transition: transform 0.3s ease-in-out; overflow-y: auto; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-content { padding: 1rem; }
+  .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 5; opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility: visibility 0.3s ease-in-out; }
+  .overlay.active { opacity: 1; visibility: visible; }
+  @import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
+  @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css");
+  * { padding: 0; margin: 0; box-sizing: border-box; }
+  :root { --text-color: #222; --subtitle-color: #777; --placegilder-color: black; --primary-color: #fff; --secondary-color: #eee; --secondary-hover-color: #ddd; --typing-blue: blue; --ai-response-bg: #f0f0f0; --ai-response-text: #333; }
+  body { font-family: "Poppins", sans-serif; background-color: var(--primary-color); color: var(--text-color); }
+  .header, .typing-area { color: var(--text-color); }
+  .header, .typing-form, .chat-list .message { max-width: 1100px; margin: 0 auto; }
+  .header { margin-top: 7vh; padding: 1rem; }
+  body.hide-header .header { margin-top: 0; display: none; }
+  .header :where(.title, .subtitle) { font-weight: 500; line-height: 3.6rem; }
+  .header .title { font-size: 2.7rem; background: linear-gradient(to right, purple, blue); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .header .subtitle { font-size: 2.4rem; color: var(--subtitle-color); }
+  .suggestion-list { margin-top: 9.5vh; list-style: none; display: flex; gap: 1.25rem; overflow-x: auto; scrollbar-width: none; -webkit-scrollbar-width: none; -ms-overflow-style: none; }
+  .suggestion-list::-webkit-scrollbar { display: none; }
+  .suggestion-list .suggestion { padding: 1.25rem; cursor: pointer; width: 230px; flex-shrink: 0; border-radius: 0.75rem; background: white; text-align: center; border: 2px solid blue; box-sizing: border-box; font-weight: bold; }
+  .suggestion-list .suggestion:hover { background: var(--secondary-hover-color); }
+  .suggestion-list .suggestion span { color: var(--subtitle-color); display: block; }
+  .chat-list { padding: 2rem 1rem 12rem; max-height: 100vh; overflow-y: auto; scrollbar-color: #999 transparent; scrollbar-width: thin; }
+  .chat-list::-webkit-scrollbar { width: 12px; }
+  .chat-list::-webkit-scrollbar-thumb { background-color: #999; border-radius: 6px; }
+  .chat-list::-webkit-scrollbar-track { background-color: transparent; }
+  .chat-list .message { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+
+    /* AI messages (incoming) */
+    .chat-list .message.incoming {
+      flex-direction: row; /*  avatar and content horizontally */
+      align-items: flex-start; /* Align to the top */
+    }
+
+    .chat-list .message.incoming .message-content {
+        background-color: white;
+        border-radius: 10px;
+        padding: 1rem;
+        max-width: 95%;
+        width: fit-content;
+        word-wrap: break-word;
+    }
+
+    .chat-list .message.incoming .message-content .text {
+        color: var(--ai-response-text);
+        font-size: 1.1rem;
+    }
+
+      /* User messages (outgoing) */
+      .chat-list .message.outgoing {
+        align-self: flex-end; /* Align outgoing messages to the right*/
+      }
+    .chat-list .message.outgoing .message-content {
+        max-width: 95%;
+        width: fit-content;
+        word-wrap: break-word;
+    }
+
+
+  /* --- Responsive --- */
+  @media (max-width: 768px) {
+      .chat-list .message .message-content { max-width: 90%; }
+  }
+
+  .chat-list .message .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+  .chat-list .message .text { color: var(--text-color); }
+  .chat-list .message.loading .text { display: none; }
+  .chat-list .message.loading .avatar { animation: rotate 3s linear infinite; }
+  @keyframes rotate { 100% { transform: rotate(360deg); } }
+  .typing-area { position: fixed; width: 100%; bottom: 0; padding: 1rem; background: var(--primary-color); }
+  .typing-area .input-wrapper { height: 56px; width: 100%; display: flex; position: relative; }
+  .typing-area .typing-input { width: 100%; height: 100%; border: 2px solid blue; outline: none; border-radius: 6.2rem; background: white; font-size: 1rem; color: var(--text-color); box-sizing:border-box; padding-left: 1.5rem; padding-right: 3rem; }
+  .typing-area .typing-input::placeholder { color: black; }
+  .typing-area .typing-input:focus { background: white; }
+  .typing-area :where(.typing-form, .actions-buttons) { display: flex; gap: 0.75rem; }
+  .typing-area .icon { height: 56px; width: 56px; display: flex; align-items: center; justify-content: center; background: blue; color: var(--text-color); border-radius: 50%; cursor: pointer; }
+  .typing-area .icon svg { width: 24px; height: 24px; fill: blue; }
+  .typing-area .icon:hover { background: var(--secondary-hover-color) !important; }
+  .typing-area .input-wrapper .icon { position: absolute; right: 0; outline: none; border: none; color: white; background: none; }
+  .dis-text { font-size: 0.85rem; margin-top: 1rem; text-align: center; color: var(--placegilder-color); }
+  .typing-area .input-wrapper .icon { transform: scale(0); transition: transform 0.3s ease-in-out; }
+  .typing-area .input-wrapper .typing-input:valid ~ .icon { transform: scale(1); }
+  @media (max-width: 768px) {
+    .header :is(.title, .subtitle) { font-size: 2rem; line-height: 2.6rem; }
+    .header .subtitle { font-size: 1.7rem; }
+    .chat-list .message .avatar { width: 37px; height: 37px; }
+    .typing-area :where(.typing-form, .actions-buttons) { gap: 0.4rem; }
+    .typing-form .input-wrapper { height: 50px; }
+    .typing-form .typing-input { padding: 1.1rem 3.5rem 1.1rem 1.2rem; }
+    .typing-area .icon { height: 50px; width: 50px; }
+    .typing-area .dis-text { font-size: 0.75rem; margin-top: 0.5rem; }
+  }
+  .chat-list .message.loading .text { display: flex; align-items: center; color: var(--typing-blue); margin-top: 0.5rem; }
+  .chat-list .message.loading .text::before { content: "Generating"; margin-right: 0.5rem; }
+  .chat-list .message.loading .text::after { content: ''; width: 16px; height: 16px; margin-left: 8px; border-radius: 50%; border: 3px solid rgba(0, 0, 0, 0.15); border-top-color: var(--typing-blue); animation: spinner 0.75s linear infinite; }
+  @keyframes spinner { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .sidebar-content .chat-history-item { padding: 0.5rem 1rem; cursor: pointer; border-bottom: 1px solid #eee; }
+  .sidebar-content .chat-history-item:hover { background-color: #f0f0f0; }
+  .sidebar-content .chat-history-item.active { background-color: #ddd; }
+
+  .input-icon {
+    position: absolute;
+    left: 15px;  /* Place icon on the left */
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #777;
+    /* opacity: 1;   Default: visible */
+    /* transition: opacity 0.2s ease-in-out; */
+  }
+
+  .input-icon.hidden {
+    /* opacity: 0;   Hide when input has text */
+  }
+
+    /* Adjust padding to accommodate the icon */
+  .typing-input {
+    padding-left: 3rem !important; /*  For left-positioned icon */
+    padding-right: 3.5rem !important; /*  For right-positioned icon */
+
+  }
+
+  /* Reduced gap between avatar and content */
+  .chat-list .message.incoming {
+    gap: 0.5rem; /* Smaller gap */
+  }
+
+    /* Style for call button inside input */
+    .input-wrapper .call-button {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        background: blue;
+        color: white;
+        border: none;
+        border-radius: 0 6.2rem 6.2rem 0;
+        width: 3.5rem;  /* Adjust width as needed */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: transform 0.3s ease-in-out; /* Add transition for smooth effect */
+        transform: scale(1); /* Initially visible */
+    }
+
+    .input-wrapper .call-button:hover {
+        background: #0033cc;
+    }
+
+    .input-wrapper .call-button svg {
+        width: 1.4rem; /* Adjust icon size */
+        height: 1.4rem;
+    }
+
+    /* Glowing border for the input on focus */
+    .typing-input:focus {
+      /* Use a more specific selector to override existing styles */
+      border: none; /* Remove the original border */
+      box-shadow: 0 0 10px 2px rgba(0, 123, 255, 0.7); /* Glowing effect (adjust color and spread as desired) */
+      /* Optionally, add a transition for a smoother glow */
+      transition: box-shadow 0.3s ease;
+    }
+
+    /* Adjust padding for the glowing effect. Add some space for the glow to breathe */
+    .typing-input {
+      padding: 1.4rem 3rem 1.4rem 3.5rem; /* Adjust padding as needed */
+    }
+</style>
+</head>
+<body>
+
+<div class="bg-white flex items-center justify-between p-4">
+  <div class="flex items-center">
+    <button id="menuButton" class="md:hidden focus:outline-none">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-gray-700"><path fill-rule="evenodd" d="M3 6.75A.75.75 0 0 1 3.75 6h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 6.75ZM3 12a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 12Zm0 5.25a.75.75 0 0 1 .75-.75H12a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" /></svg>
+    </button>
+    <div class="flex items-center ml-4">
+      <img src="https://assets.onecompiler.app/4398w3ppx/439fk3p9e/1000013576.jpg" alt="Zayan AI Logo" class="w-8 h-8 mr-2 rounded-full">
+      <a href="#" class="text-lg font-semibold text-gray-800">Zayan AI</a>
+    </div>
+  </div>
+  <div></div>
+</div>
+
+<div id="sidebar" class="sidebar">
+  <div class="sidebar-content">
+     <div class="chat-history"></div>
+    <a href="#" id="newChatButton" class="block px-4 py-2 text-gray-800 hover:bg-gray-100">New Chat</a>
+  </div>
+</div>
+
+<div id="overlay" class="overlay"></div>
+
+<header class="header">
+  <h2 class="title"></h2>
+  <ul class="suggestion-list">
+    <li class="suggestion"><h4 class="text">Create a morning routine<span>to boost my productivity</span></h4></li>
+    <li class="suggestion"><h4 class="text">Help me study<span>vocabulary for an exam</span></h4></li>
+    <li class="suggestion"><h4 class="text">Make me a personal webpage<span>after asking me three questions</span></h4></li>
+    <li class="suggestion"><h4 class="text">Plan a trip<span>to experience Seoul like a local</span></h4></li>
+  </ul>
+</header>
+
+<div class="chat-list"></div>
+
+<div class="typing-area">
+  <form action="#" class="typing-form">
+    <div class="input-wrapper">
+
+      <span class="input-icon" id="searchIcon">
+       <!-- SEARCH ICON -->
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+</svg>
+
+
+        
+        <!-- /SEARCH ICON -->
+      </span>
+      <input type="text" class="typing-input" placeholder="Ask Zayan AI" required>
+      <button type="button" id="callButton" class="icon call-button"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
+      </svg>
+      </button>
+      <button type="submit" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm.53 5.47a.75.75 0 0 0-1.06 0l-3 3a.75.75 0 1 0 1.06 1.06l1.72-1.72v5.69a.75.75 0 0 0 1.5 0v-5.69l1.72 1.72a.75.75 0 1 0 1.06-1.06l-3-3Z" clip-rule="evenodd" /></svg></button>
+    </div>
+  </form>
+</div>
+
+<script>
+const menuButton = document.getElementById('menuButton');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const newChatButton = document.getElementById('newChatButton');
+const chatList = document.querySelector(".chat-list");
+const chatHistoryContainer = document.querySelector('.chat-history');
+const typingForm = document.querySelector(".typing-form");
+const suggestions = document.querySelectorAll(".suggestion-list .suggestion");
+const typingInput = typingForm.querySelector(".typing-input");
+const searchIcon = typingForm.querySelector("#searchIcon"); // Get the search icon
+const callButton = document.getElementById("callButton"); // Changed to get by ID
+const sendButton = typingForm.querySelector(".icon[type='submit']"); // Get the send button
+
+let chatHistory = [];
+let currentChatIndex = -1;
+const API_KEY = "sk_4w0FkMeJoGaGD2mOXV2Gwo4TOrVIaFYVCD0mMuyxaYStGTfz"; // Replace!
+const CHATBOT_NAME = "Samar ai";
+const USERNAME = "da_564";
+
+menuButton.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('active'); });
+overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+function clearChat() { chatList.innerHTML = ''; }
+
+function displayChatHistory() {
+  chatHistoryContainer.innerHTML = '';
+  chatHistory.forEach((chat, index) => {
+    const chatHistoryItem = document.createElement('div');
+    chatHistoryItem.classList.add('chat-history-item');
+    chatHistoryItem.textContent = `Chat ${index + 1}: ${chat.messages[0]?.text.substring(0, 20) || 'New Chat'}...`;
+      if (index === currentChatIndex) { chatHistoryItem.classList.add('active'); }
+    chatHistoryItem.addEventListener('click', () => loadChat(index));
+    chatHistoryContainer.appendChild(chatHistoryItem);
+  });
+}
+
+function loadChat(index) {
+  currentChatIndex = index;
+  displayChatHistory();
+  clearChat();
+  chatHistory[index].messages.forEach(message => {
+      const html = `<div class="message-content"><p class="text">${message.text}</p></div>`;
+      const messageDiv = createMessageElement(html, message.role === 'user' ? 'outgoing' : 'incoming', message.role === 'user' ? 'https://assets.onecompiler.app/4398w3ppx/439fk3p9e/1000013577.png' : 'https://assets.onecompiler.app/4398w3ppx/439fk3p9e/1000013576.jpg');
+    chatList.appendChild(messageDiv);
+  });
+  chatList.scrollTo(0, chatList.scrollHeight);
+  document.body.classList.add("hide-header");
+}
+
+newChatButton.addEventListener('click', (e) => {
+  e.preventDefault();
+  clearChat();
+  currentChatIndex = -1;
+  displayChatHistory();
+  sidebar.classList.remove('open');
+  overlay.classList.remove('active');
+});
+
+const createMessageElement = (content, role, avatarSrc) => {
+  const div = document.createElement("div");
+  div.classList.add("message", role);
+
+  const avatar = document.createElement("img");
+  avatar.src = avatarSrc;
+  avatar.alt = `${role === 'outgoing' ? 'user' : 'Zayan.ai'}`;
+  avatar.classList.add("avatar");
+
+  // Always add avatar *before* content
+    div.appendChild(avatar);
+    div.innerHTML += content;
+
+  return div;
+};
+
+const showLoadingAnimation = () => {
+  const html = `<div class="message-content"><p class="text">Generating....</p></div>`;
+  const incomingMessageDiv = createMessageElement(html, "incoming", 'https://assets.onecompiler.app/4398w3ppx/439fk3p9e/1000013576.jpg');
+  chatList.appendChild(incomingMessageDiv);
+  chatList.scrollTo(0, chatList.scrollHeight);
+  return incomingMessageDiv;
+};
+
+const sendMessage = async (input) => {
+    const apiUrl = "https://api.vectorshift.ai/api/chatbots/run";
+    let conversationId = null;
+    if (currentChatIndex !== -1 && chatHistory[currentChatIndex]) {
+      conversationId = chatHistory[currentChatIndex].conversationId;
+    }
+
+    const payload = {
+        input: input,
+        chatbot_name: CHATBOT_NAME,
+        username: USERNAME,
+        conversation_id: conversationId,
+    };
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Api-Key": API_KEY, },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+
+  const data = await response.json();
+    if (currentChatIndex === -1) {
+      chatHistory.push({ messages: [], conversationId: data.conversation_id });
+      currentChatIndex = chatHistory.length - 1;
+    }
+    else if (chatHistory[currentChatIndex] && !chatHistory[currentChatIndex].conversationId) {
+      chatHistory[currentChatIndex].conversationId = data.conversation_id;
+    }
+    return data.output;
+};
+
+const handleOutgoingChat = async (userInput, search = false) => {
+
+  if (!userInput) return;
+  if (search) {
+    // Perform Google search or Bing search here based on the userInput
+    const searchQuery = userInput;
+    let searchResults = [];
+
+    // Simple Google search (replace with a proper API call if needed)
+    if (searchQuery) {
+      window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`, '_blank');
+      return; // Don't proceed with chat if it's a search
+    }
+    else {
+        return;
+    }
+
+  }
+
+  const outgoingHtml = `<div class="message-content"><p class="text">${userInput}</p></div>`;
+  const outgoingMessageDiv = createMessageElement(outgoingHtml, "outgoing", 'https://assets.onecompiler.app/4398w3ppx/439fk3p9e/1000013577.png');
+  chatList.appendChild(outgoingMessageDiv);
+  typingForm.reset();
+  toggleSearchIconVisibility();
+  chatList.scrollTo(0, chatList.scrollHeight);
+  document.body.classList.add("hide-header");
+
+  const loadingMessageDiv = showLoadingAnimation();
+
+  try {
+    const botResponse = await sendMessage(userInput);
+    loadingMessageDiv.querySelector('.text').innerText = botResponse;
+
+    const newMessage = { role: 'user', text: userInput };
+    const newResponse = { role: 'assistant', text: botResponse };
+
+    if (chatHistory[currentChatIndex]) {
+      chatHistory[currentChatIndex].messages.push(newMessage);
+      chatHistory[currentChatIndex].messages.push(newResponse);
+    }
+    displayChatHistory();
+
+  } catch (error) {
+    loadingMessageDiv.querySelector('.text').innerText = "Error: Unable to get a response.";
+    loadingMessageDiv.querySelector('.text').classList.add('error');
+    console.error("API Error:", error);
+  } finally {
+    // Show call button after sending the message
+    toggleCallButton();
+  }
+};
+
+suggestions.forEach((suggestion) => { suggestion.addEventListener("click", () => { typingForm.querySelector(".typing-input").value = suggestion.querySelector('.text').innerText; handleOutgoingChat(suggestion.querySelector('.text').innerText); }); });
+typingForm.addEventListener("submit", (e) => { e.preventDefault(); handleOutgoingChat(typingInput.value.trim()); });
+
+// Handle search icon click
+searchIcon.addEventListener("click", () => {
+  const userInput = typingInput.value.trim();
+  if (userInput) {
+    handleOutgoingChat(userInput, true); // Call handleOutgoingChat with search flag
+  }
+});
+
+displayChatHistory();
+
+function toggleSearchIconVisibility() {
+  if (typingInput.value.trim() === "") {
+    searchIcon.classList.remove("hidden");
+  } else {
+    searchIcon.classList.add("hidden");
+  }
+}
+
+typingInput.addEventListener("input", toggleSearchIconVisibility);
+toggleSearchIconVisibility();
+
+// Add event listener to the call button
+callButton.addEventListener('click', () => {
+    window.open('https://aya6n.vercel.app/', '_blank');
+});
+
+// Function to hide/show the call button based on input
+function toggleCallButton() {
+  if (typingInput.value.trim() !== "") {
+    callButton.style.transform = 'scale(0)'; // Hide
+  } else {
+    callButton.style.transform = 'scale(1)'; // Show
+  }
+}
+
+// Add event listener to the input field
+typingInput.addEventListener("input", toggleCallButton);
+
+// Initial call button state
+toggleCallButton();
+</script>
+</body>
+</html>
